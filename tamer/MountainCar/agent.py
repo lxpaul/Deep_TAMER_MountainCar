@@ -146,7 +146,7 @@ class Tamer:
         state, _ = self.env.reset()
 
         for ts in count():
-            print(f' {ts}', end='')
+            #print(f' {ts}', end='')
             # print(f' {ts}')
             # self.env.render()
             frame_bgr = cv2.cvtColor(self.env.render(), cv2.COLOR_RGB2BGR)
