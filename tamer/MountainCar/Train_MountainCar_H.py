@@ -24,5 +24,6 @@ def main():
         loss.backward()
         optimizer.step()
 
+    th.save(H_model.state_dict(), "H_model_first_try")
 if __name__ == '__main__':
     main()

@@ -8,7 +8,7 @@ import asyncio
 import gymnasium as gym
 import matplotlib as plt
 
-from tamer.agent import Tamer
+from agent import Tamer
 
 
 async def main():

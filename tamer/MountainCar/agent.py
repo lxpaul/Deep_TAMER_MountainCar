@@ -13,11 +13,7 @@ from sklearn import pipeline, preprocessing
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import SGDRegressor
 import torch as th
-import torch.nn as nn
-import torch.optim as optim
-
-from tamer.H_Network import *
-
+from H_Network import *
 
 MOUNTAINCAR_ACTION_MAP = {0: 'left', 1: 'none', 2: 'right'}
 
@@ -99,7 +95,9 @@ class Tamer:
         self.env = env
         self.uuid = uuid.uuid4()
         self.output_dir = output_dir
-
+        self.human_reward_model = H_prediction_model(3)
+        self.human_reward_model.load_state_dict(th.load("tamer/saved_models/H_model_first_try", weights_only=True))
+        self.human_reward_model.eval()
 
         # init model
         if model_file_to_load is not None:
@@ -110,10 +108,6 @@ class Tamer:
                 self.H = SGDFunctionApproximator(env)  # init H function
             else:  # optionally run as standard Q Learning
                 self.Q = SGDFunctionApproximator(env)  # init Q function
-        self.encoder = Encoder(env.observation_space.shape[0])
-        self.h_pred_model = H_prediction_model()
-        self.optimizer = optim.Adam(H_prediction_model.parameters)
-        self.loss_fn = nn.CrossEntropyLoss()
 
         # hyperparameters
         self.discount_factor = discount_factor
@@ -133,7 +127,6 @@ class Tamer:
             'Environment Reward',
             'Combined Reward',
         ]
-        self.reward_log_path = os.path.join(self.output_dir, f'{self.uuid}.csv')
 
     def act(self, state):
         """ Epsilon-greedy Policy """
@@ -151,68 +144,55 @@ class Tamer:
         rng = np.random.default_rng()
         tot_reward = 0
         state, _ = self.env.reset()
-        ep_start_time = dt.datetime.now().time()
-        with open(self.reward_log_path, 'a+', newline='') as write_obj:
-            dict_writer = DictWriter(write_obj, fieldnames=self.reward_log_columns)
-            dict_writer.writeheader()
-            for ts in count():
-                print(f' {ts}', end='')
-                # print(f' {ts}')
-                # self.env.render()
-                frame_bgr = cv2.cvtColor(self.env.render(), cv2.COLOR_RGB2BGR)
-                # print(self.env.render())
-                cv2.imshow('OpenAI Gymnasium Training', frame_bgr)
-                key = cv2.waitKey(25)  # Adjust the delay (25 milliseconds in this case)
-                if key == 27:
-                    break
 
-                # Determine next action
-                action = self.act(state)
-                if self.tame:
-                    disp.show_action(action)
+        for ts in count():
+            print(f' {ts}', end='')
+            # print(f' {ts}')
+            # self.env.render()
+            frame_bgr = cv2.cvtColor(self.env.render(), cv2.COLOR_RGB2BGR)
+            # print(self.env.render())
+            cv2.imshow('OpenAI Gymnasium Training', frame_bgr)
+            key = cv2.waitKey(25)  # Adjust the delay (25 milliseconds in this case)
+            if key == 27:
+                break
 
-                # Get next state and reward
-                next_state, reward, done, info, _ = self.env.step(action)
+            # Determine next action
+            action = self.act(state)
+            if self.tame:
+                disp.show_action(action)
 
-                if not self.tame:
-                    if done and next_state[0] >= 0.5:
-                        td_target = reward
-                    else:
-                        td_target = reward + self.discount_factor * np.max(
-                            self.Q.predict(next_state)
-                        )
-                    self.Q.update(state, action, td_target)
+            # Get next state and reward
+            next_state, reward, done, info, _ = self.env.step(action)
+
+            if not self.tame:
+                if done and next_state[0] >= 0.5:
+                    td_target = reward
                 else:
-                    now = time.time()
-                    while time.time() < now + self.ts_len:
-                        frame = None
-                        time.sleep(0.01)  # save the CPU
-                        human_reward = disp.get_scalar_feedback()
+                    td_target = reward + self.discount_factor * np.max(
+                        self.Q.predict(next_state)
+                    )
+                self.Q.update(state, action, td_target)
+            else:
+                now = time.time()
+                while time.time() < now + self.ts_len:
+                    frame = None
+                    time.sleep(0.01)  # save the CPU
+                    human_reward = th.sign(self.human_reward_model(th.tensor([state[0],state[1],action],dtype=th.float32))).item()
 
-                        feedback_ts = dt.datetime.now().time()
-                        if human_reward != 0:
-                            dict_writer.writerow(
-                                {
-                                    'Episode': episode_index + 1,
-                                    'Ep start ts': ep_start_time,
-                                    'Feedback ts': feedback_ts,
-                                    'Human Reward': human_reward,
-                                    'Environment Reward': reward
-                                }
-                            )
-                            
-                            self.H.update(state, action, human_reward)
+                    if human_reward != 0:
+                        
+                        self.H.update(state, action, human_reward)
 
-                            break
+                        break
 
-                tot_reward += reward
-                if done:
-                    print(f'  Reward: {tot_reward}')
-                    cv2.destroyAllWindows()
-                    break
+            tot_reward += reward
+            if done:
+                print(f'  Reward: {tot_reward}')
+                cv2.destroyAllWindows()
+                break
 
-                stdout.write('\b' * (len(str(ts)) + 1))
-                state = next_state
+
+            state = next_state
 
         # Decay epsilon
         if self.epsilon > self.min_eps:
@@ -230,7 +210,7 @@ class Tamer:
         disp = None
         if self.tame:
             # only init pygame display if we're actually training tamer
-            from .interface import Interface
+            from interface import Interface
             disp = Interface(action_map=MOUNTAINCAR_ACTION_MAP)
             #disp = Interface(action_map=LUNARLANDER_ACTION_MAP)
             #disp = Interface(action_map=CARTPOLE_ACTION_MAP)
@@ -241,8 +221,6 @@ class Tamer:
 
         print('\nCleaning up...')
         self.env.close()
-        if model_file_to_save is not None:
-            self.save_model(filename=model_file_to_save)
 
     def play(self, n_episodes=1, render=False):
         """
@@ -291,28 +269,3 @@ class Tamer:
             f'episodes: {avg_reward:.2f}'
         )
         return avg_reward
-
-    def save_model(self, filename):
-        """
-        Save H or Q model to models dir
-        Args:
-            filename: name of pickled file
-        """
-        model = self.H if self.tame else self.Q
-        filename = filename + '.p' if not filename.endswith('.p') else filename
-        with open(MODELS_DIR.joinpath(filename), 'wb') as f:
-            pickle.dump(model, f)
-
-    def load_model(self, filename):
-        """
-        Load H or Q model from models dir
-        Args:
-            filename: name of pickled file
-        """
-        filename = filename + '.p' if not filename.endswith('.p') else filename
-        with open(MODELS_DIR.joinpath(filename), 'rb') as f:
-            model = pickle.load(f)
-        if self.tame:
-            self.H = model
-        else:
-            self.Q = model
