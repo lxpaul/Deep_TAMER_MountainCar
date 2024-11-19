@@ -15,13 +15,12 @@ async def main():
     
     cv2.namedWindow('OpenAI Gymnasium Playing', cv2.WINDOW_NORMAL)
     
-    MountainCar_Data = np.zeros((10,4))
+    MountainCar_Data = np.load("Data/MountainCar_Data.npy")
 
     for i in range(10):
 
         observation_example = env.observation_space.sample()
         env.unwrapped.state = observation_example
-        print(env.unwrapped.state)
         pos,vel = env.unwrapped.state
         env.render()
 
@@ -45,12 +44,11 @@ async def main():
         y_scale = window_Y/2
 
         start_arrow = (int((pos+1.2) * x_scale),
-                       int(window_Y - ((np.sin(3*pos) + 1) * y_scale)))
-        slope = 3 * np.cos(3 * pos)
-        angle = np.arctan(slope)
+                       int(window_Y - 50 - ((np.sin(3*pos) + 0.8) * y_scale)))
         arrow_length = 2000 * vel
-        end_arrow = (int(start_arrow[0] + arrow_length * np.cos(angle)),
-                     int(start_arrow[1] - arrow_length * np.sin(angle)))
+        end_arrow = (int(start_arrow[0] + arrow_length),
+                     start_arrow[1])
+                     
         color = (128,0,128)
         thick = 2
         arrow = cv2.arrowedLine(frame_bgr, start_arrow, end_arrow, 
@@ -67,13 +65,10 @@ async def main():
                     area = screen.fill((255, 0, 0))
                     reward = -1
                     break
-        MountainCar_Data[i] = (pos,vel,action_id,reward)
-        print(MountainCar_Data)
+        new_data = np.array((pos,vel,action_id,reward))[np.newaxis]
+        MountainCar_Data = np.concatenate([MountainCar_Data,new_data])
+    np.save('Data/MountainCar_Data',MountainCar_Data)
         
-
-
-
-
 if __name__ == '__main__':
     asyncio.run(main())
 
