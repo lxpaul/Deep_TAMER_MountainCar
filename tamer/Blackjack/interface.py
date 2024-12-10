@@ -42,7 +42,7 @@ class Interface:
         """
         Show agent's action on pygame screen
         Args:
-            action: numerical action (for MountainCar environment only currently)
+            action: numerical action
         """
         area = self.screen.fill((0, 0, 0))
         pygame.display.update(area)

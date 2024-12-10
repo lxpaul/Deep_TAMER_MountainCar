@@ -1,3 +1,4 @@
+import datetime as dt
 import os
 import time
 import uuid
@@ -11,7 +12,7 @@ from sklearn.linear_model import SGDRegressor
 import torch as th
 from H_Network import *
 
-MOUNTAINCAR_ACTION_MAP = {0: 'left', 1: 'none', 2: 'right'}
+BLACKJACK_ACTION_MAP = {0: 'Stick', 1: 'Hit'}
 
 import cv2
 
@@ -88,8 +89,8 @@ class Tamer:
         # init model
         if model_file_to_load is not None:
             print(f'Loaded pretrained model: {model_file_to_load}')
-            self.human_reward_model = H_prediction_model(3)
-            self.human_reward_model.load_state_dict(th.load(os.path.join("tamer/MountainCar/saved_models",model_file_to_load), weights_only=True))
+            self.human_reward_model = H_prediction_model(4)
+            self.human_reward_model.load_state_dict(th.load(os.path.join("tamer/Blackjack/saved_models",model_file_to_load), weights_only=True))
             self.human_reward_model.eval()
 
         if tame:
@@ -125,14 +126,11 @@ class Tamer:
 
     def _train_episode(self, episode_index, disp):
         print(f'Episode: {episode_index + 1}  Timestep:', end='')
-        cv2.namedWindow('OpenAI Gymnasium Training', cv2.WINDOW_NORMAL)
 
         tot_reward = 0
         state, _ = self.env.reset()
 
         for ts in count():
-            frame_bgr = cv2.cvtColor(self.env.render(), cv2.COLOR_RGB2BGR)
-            cv2.imshow('OpenAI Gymnasium Training', frame_bgr)
             key = cv2.waitKey(25)  # Adjust the delay (25 milliseconds in this case)
             if key == 27:
                 break
@@ -158,7 +156,7 @@ class Tamer:
                 while time.time() < now + self.ts_len:
                     frame = None
                     time.sleep(0.01)  # save the CPU
-                    human_reward = th.sign(self.human_reward_model(th.tensor([state[0],state[1],action],dtype=th.float32))).item()
+                    human_reward = th.sign(self.human_reward_model(th.tensor([state[0],state[1],state[2],action],dtype=th.float32))).item()
 
                     if human_reward != 0:
                         
@@ -169,7 +167,6 @@ class Tamer:
             tot_reward += reward
             if done:
                 print(f'  Reward: {tot_reward}')
-                cv2.destroyAllWindows()
                 break
 
 
@@ -190,7 +187,7 @@ class Tamer:
         if self.tame:
             # only init pygame display if we're actually training tamer
             from interface import Interface
-            disp = Interface(action_map=MOUNTAINCAR_ACTION_MAP)
+            disp = Interface(action_map=BLACKJACK_ACTION_MAP)
 
         for i in range(self.num_episodes):
             print(f"Num episode : {i}")

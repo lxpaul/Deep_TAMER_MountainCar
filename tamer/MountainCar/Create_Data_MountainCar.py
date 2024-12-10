@@ -1,11 +1,9 @@
 import asyncio
 import gymnasium as gym
 import cv2 as cv2
-import time
 import pygame
-from H_Network import *
 import numpy as np
-
+import os as os
 
 async def main():
 
@@ -13,24 +11,29 @@ async def main():
     env.reset()
     MountainCar_Action_Map = {0:"left", 1:"none", 2:"right"}
     
+    
+    if os.path.isfile("tamer/MountainCar/Data/MountainCar_Data.npy"):
+        MountainCar_Data = np.load("tamer/MountainCar/Data/MountainCar_Data.npy")
+    else:
+        MountainCar_Data = np.zeros(shape=(0,4))
+        np.save("tamer/MountainCar/Data/MountainCar_Data.npy",MountainCar_Data)
+
+
     cv2.namedWindow('OpenAI Gymnasium Playing', cv2.WINDOW_NORMAL)
     
-    MountainCar_Data = np.load("Data/MountainCar_Data.npy")
-
     for i in range(10):
-
+        env.reset()
         observation_example = env.observation_space.sample()
         env.unwrapped.state = observation_example
         pos,vel = env.unwrapped.state
         env.render()
-
         frame_bgr = cv2.cvtColor(env.render(), cv2.COLOR_RGB2BGR)
         cv2.imshow('OpenAI Gymnasium Playing', frame_bgr)
         screen = pygame.display.set_mode((200, 100))
         area = screen.fill((0, 0, 0))
         pygame.display.update(area)
         font = pygame.font.Font("freesansbold.ttf", 32)
-        action_id = int(np.random.random()*3)
+        action_id = int(np.random.random()*len(MountainCar_Action_Map))
         action = MountainCar_Action_Map[action_id]
         text = font.render(action, True, (255, 255, 255))
         text_rect = text.get_rect()
@@ -57,17 +60,17 @@ async def main():
         while True:
             event = pygame.event.wait()
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_w:
+                if event.key == pygame.K_g:
                     area = screen.fill((0, 255, 0))
                     reward = 1
                     break
-                elif event.key == pygame.K_a:
+                elif event.key == pygame.K_b:
                     area = screen.fill((255, 0, 0))
                     reward = -1
                     break
         new_data = np.array((pos,vel,action_id,reward))[np.newaxis]
         MountainCar_Data = np.concatenate([MountainCar_Data,new_data])
-    np.save('Data/MountainCar_Data',MountainCar_Data)
+    np.save("tamer/MountainCar/Data/MountainCar_Data.npy",MountainCar_Data)
         
 if __name__ == '__main__':
     asyncio.run(main())
